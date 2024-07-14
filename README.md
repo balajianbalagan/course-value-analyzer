@@ -1,0 +1,1 @@
+Course Value Analysis with Job Market Data - Analyze the relevance of educational courses in today's job market using data-driven insights, leveraging machine learning to predict course value based on current job demands. Built with Python, Flask, Scikit-learn, Pandas, SpaCy, Highcharts, Bootstrap
