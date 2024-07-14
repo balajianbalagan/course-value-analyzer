@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Job Search</title>
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            left: 50%;
+            margin-left: -15px; /* Adjust based on loader size */
+            top: 50%;
+            margin-top: -15px; /* Adjust based on loader size */
+            display: none; /* Initially hidden */
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .table {
+            table-layout: auto;
+            width: 100%;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container-fluid container mt-5" style="max-width: 1186px;">
+        <h1 class="text-center">Job Search</h1>
+        <form id="jobSearchForm" class="mt-4">
+            <div class="form-group">
+                <label for="job_name">Job Name:</label>
+                <input type="text" class="form-control" id="job_name" name="job_name" placeholder="Enter job name here">
+            </div>
+            <div class="form-group">
+                <label for="job_keywords">Job Keywords:</label>
+                <input type="text" class="form-control" id="job_keywords" name="job_keywords" placeholder="Enter job keywords here">
+            </div>
+            <button type="submit" class="btn btn-success">Search</button>
+            <a href="/course_analysis" class="btn btn-primary">Course Analysis</a>
+
+            <div id="loader" class="loader"></div> <!-- Loader element -->
+        </form>
+        <div id="results" class="mt-4"></div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('jobSearchForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const jobName = document.getElementById('job_name').value;
+            const jobKeywords = document.getElementById('job_keywords').value;
+            
+            // Show loader
+            document.getElementById('loader').style.display = 'block';
+
+            fetch('/job_search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ job_name: jobName, job_keywords: jobKeywords })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = `
+                    <h3>Search Results</h3>
+                    <div class="table-container">
+                        <table class="table table-bordered table-striped">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Company</th>
+                                    <th>Location</th>
+                                    <th>Salary</th>
+                                    <th>Skills</th>
+                                    <th>Job Description</th>
+                                    <th>Job URL</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.results.map(job => `
+                                    <tr>
+                                        <td>${job.title}</td>
+                                        <td>${job.companyName}</td>
+                                        <td>${job.location}</td>
+                                        <td>${job.salary}</td>
+                                        <td>${job.tagsAndSkills}</td>
+                                        <td>${job.jobDescription}</td>
+                                        <td><a href="https://www.naukri.com/${job.jdURL}" target="_blank">Job Link</a></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                // Hide loader after results are displayed
+                document.getElementById('loader').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Handle error and hide loader if necessary
+                document.getElementById('loader').style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>

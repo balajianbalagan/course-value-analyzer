@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Job Readiness Analysis</title>
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            left: 50%;
+            margin-left: -15px; /* Adjust based on loader size */
+            top: 50%;
+            margin-top: -15px; /* Adjust based on loader size */
+            display: none; /* Initially hidden */
+            z-index: 100;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .collapsible-content {
+            display: none; /* Initially hidden */
+            overflow-x: auto; /* Enable horizontal scrolling */
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid container mt-5" style="max-width: 1186px;">
+        <h1 class="text-center">Job Readiness Analysis</h1>
+        <form id="analyzeForm" class="mt-4">
+            <div class="form-group">
+                <label for="job_name">Select Job Name:</label>
+                <select class="form-control" id="job_name" name="job_name">
+                    <option value="">Select a job name</option>
+                    <!-- Options will be populated asynchronously -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="course_topics">Enter Course Topics:</label>
+                <input type="text" class="form-control" id="course_topics" name="course_topics" placeholder="Enter course topics here">
+            </div>
+            <button type="submit" class="btn btn-success">Analyze</button>
+            <a href="/job_search" class="btn btn-primary">Scrape Job Data</a>
+            <div id="loader" class="loader"></div> <!-- Loader element -->
+        </form>
+        <div id="results" class="mt-4">
+            <!-- Results will be inserted here -->
+        </div>
+    </div>
+    
+    <!-- Highcharts CDN -->
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Function to fetch job names and populate the select dropdown
+        async function fetchJobNames() {
+            try {
+                const response = await fetch('/job_names');
+                const jobNames = await response.json();
+                const jobNameSelect = document.getElementById('job_name');
+
+                jobNames.forEach(jobName => {
+                    const option = document.createElement('option');
+                    option.value = jobName;
+                    option.textContent = jobName;
+                    jobNameSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error fetching job names:', error);
+            }
+        }
+
+        // Populate job names select dropdown on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchJobNames();
+        });
+
+        // Handle form submission for job readiness analysis
+        document.getElementById('analyzeForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const jobName = document.getElementById('job_name').value;
+            const courseTopics = document.getElementById('course_topics').value;
+            
+            // Show loader
+            document.getElementById('loader').style.display = 'block';
+
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ job_name: jobName, course_topics: courseTopics })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = `
+                    <div class="accordion" id="resultsAccordion">
+                        <div class="card">
+                            <div class="card-header" id="headingSeven">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseSeven" aria-expanded="false" aria-controls="collapseSeven">
+                                        Similarity Metrics
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseSeven" class="collapse show" aria-labelledby="headingSeven" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <p><strong>Max Similarity:</strong> ${data.similarity_metrics.max_similarity.toFixed(2)}</p>
+                                    <p><strong>Min Similarity:</strong> ${data.similarity_metrics.min_similarity.toFixed(2)}</p>
+                                    <p><strong>Mean Similarity:</strong> ${data.similarity_metrics.mean_similarity.toFixed(2)}</p>
+                                    <p><strong>Std Similarity:</strong> ${data.similarity_metrics.std_similarity.toFixed(2)}</p>
+                                    
+                                    <!-- Highcharts container -->
+                                    <div id="similarityChart" style="height: 400px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header" id="headingOne">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                                        Job Readiness Score
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <p><strong>Job Readiness Score:</strong> ${(data.job_readiness_score * 100).toFixed(2)}%</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header" id="headingTwo">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                                        Top Matching Jobs
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseTwo" class="collapse" aria-labelledby="headingTwo" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <table class="table table-bordered table-striped">
+                                        <thead class="thead-dark">
+                                            <tr>
+                                                <th>Title</th>
+                                                <th>Company</th>
+                                                <th>Location</th>
+                                                <th>Salary</th>
+                                                <th>Skills</th>
+                                                <th>Job Description</th>
+                                                <th>Job URL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${data.top_matching_jobs.map(job => `
+                                                <tr>
+                                                    <td>${job.title}</td>
+                                                    <td>${job.companyName}</td>
+                                                    <td>${job.location}</td>
+                                                    <td>${job.salary}</td>
+                                                    <td>${job.tagsAndSkills}</td>
+                                                    <td>${job.jobDescription}</td>
+                                                    <td><a href="https://www.naukri.com/${job.jdURL}" target="_blank">Job Link</a></td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header" id="headingThree">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+                                        Demand Topics
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseThree" class="collapse" aria-labelledby="headingThree" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <!-- Highcharts container -->
+                                    <div id="demandTopicsChart" style="height: 400px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header" id="headingFour">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
+                                        Most Matching Keywords
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseFour" class="collapse" aria-labelledby="headingFour" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <h5>Course Keywords that are matching strongly with Job Market:</h5>
+                                    <!-- Highcharts container -->
+                                    <div id="mostKeywordsChart" style="height: 400px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header" id="headingFive">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseFive" aria-expanded="false" aria-controls="collapseFive">
+                                        Least Matching Keywords
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseFive" class="collapse" aria-labelledby="headingFive" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <h5 class="text-danger">Course Keywords that are matching weakly with Job Market:</h5>
+                                      <!-- Highcharts container -->
+                                    <div id="leastKeywordsChart" style="height: 400px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header" id="headingSix">
+                                <h2 class="mb-0">
+                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#collapseSix" aria-expanded="false" aria-controls="collapseSix">
+                                        Additional Keywords
+                                    </button>
+                                </h2>
+                            </div>
+                            <div id="collapseSix" class="collapse" aria-labelledby="headingSix" data-parent="#resultsAccordion">
+                                <div class="card-body">
+                                    <h5>Keywords:</h5>
+                                    <ul>
+                                        ${data.additional_keywords.map(keyword => `<li>${keyword}</li>`).join('')}
+                                    </ul>
+                                    <h5>Vectors:</h5>
+                                    <pre>${JSON.stringify(data.additional_vectors, null, 2)}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Hide loader after results are displayed
+                document.getElementById('loader').style.display = 'none';
+
+                // Enable Bootstrap collapse functionality
+                $('.collapse').on('shown.bs.collapse', function () {
+                    this.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+
+                // Render Highcharts for similarity metrics
+                renderSimilarityChart(data.similarity_distribution);
+
+                // Call the function to render demand topics chart
+                renderDemandTopicsChart(data.demand_topics);
+
+                // Call the function to render most matching keywords chart
+                renderMostKeywordsChart(data.most_keywords);
+
+                // Call the function to render most matching keywords chart
+                renderLeastKeywordsChart(data.least_keywords);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Handle error and hide loader if necessary
+                document.getElementById('loader').style.display = 'none';
+            });
+        });
+
+        function renderSimilarityChart(similarityData) {
+            Highcharts.chart('similarityChart', {
+                chart: {
+                    type: 'column'
+                },
+                title: {
+                    text: 'Similarity Distribution'
+                },
+                xAxis: {
+                    categories: similarityData.categories,
+                    title: {
+                        text: 'Jobs'
+                    }
+                },
+                yAxis: {
+                    min: 0,
+                    title: {
+                        text: 'Similarity Score'
+                    }
+                },
+                series: [{
+                    name: 'Similarity Score',
+                    data: similarityData.scores,
+                    tooltip: {
+                        valueSuffix: ''
+                    }
+                }]
+            });
+        }
+    
+    
+        // Function to render demand topics as a chart
+function renderDemandTopicsChart(demandTopicsData) {
+    const categories = Object.keys(demandTopicsData);
+    const counts = Object.values(demandTopicsData);
+
+    Highcharts.chart('demandTopicsChart', {
+        chart: {
+            type: 'bar'
+        },
+        title: {
+            text: 'Demand Topics'
+        },
+        xAxis: {
+            categories: categories,
+            title: {
+                text: 'Topics'
+            }
+        },
+        yAxis: {
+            min: 0,
+            title: {
+                text: 'Count'
+            }
+        },
+        series: [{
+            name: 'Count',
+            data: counts
+        }]
+    });
+}
+
+
+// Function to render most matching keywords and their vectors as a chart
+function renderMostKeywordsChart(keywordsData) {
+    // Prepare series data
+    const seriesData = keywordsData.keywords.map((keyword, index) => ({
+        name: keyword,
+        data: keywordsData.vectors[index]
+    }));
+
+    // Highcharts options
+    Highcharts.chart('mostKeywordsChart', {
+        chart: {
+            type: 'bar'
+        },
+        title: {
+            text: 'Most Matching Keywords and Vectors'
+        },
+        xAxis: {
+            categories: keywordsData.keywords,
+            title: {
+                text: 'Keywords'
+            }
+        },
+        yAxis: {
+            title: {
+                text: 'Vector Values'
+            }
+        },
+        series: seriesData
+    });
+}
+  
+function renderLeastKeywordsChart(keywordsData) {
+    // Prepare series data
+    const seriesData = keywordsData.keywords.map((keyword, index) => ({
+        name: keyword,
+        data: keywordsData.vectors[index]
+    }));
+
+    // Highcharts options
+    Highcharts.chart('leastKeywordsChart', {
+        chart: {
+            type: 'bar'
+        },
+        title: {
+            text: 'Most Matching Keywords and Vectors'
+        },
+        xAxis: {
+            categories: keywordsData.keywords,
+            title: {
+                text: 'Keywords'
+            }
+        },
+        yAxis: {
+            title: {
+                text: 'Vector Values'
+            }
+        },
+        series: seriesData
+    });
+}
+ 
+  
+  </script>
+</body>
+</html>
